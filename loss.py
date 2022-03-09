@@ -152,7 +152,7 @@ class ComputeLoss:
         self.ssi = 0  # stride 16 index
         self.BCEcls, self.BCEobj, self.gr, self.hyp, self.autobalance = BCEcls, BCEobj, 1.0, h, autobalance
         self.na = 3
-        self.nc = 80
+        self.nc = 2 # TODO: classes
         self.anchors = torch.tensor([[[ 1.25000,  1.62500],
                                     [ 2.00000,  3.75000],
                                     [ 4.12500,  2.87500]],

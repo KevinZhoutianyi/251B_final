@@ -206,6 +206,7 @@ class Darknet(nn.Module):
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
+            # print(i, module_def["type"], x.shape)
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                 x = module(x)
             elif module_def["type"] == "route":

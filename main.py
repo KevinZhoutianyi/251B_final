@@ -8,6 +8,7 @@ from loss import ComputeLoss
 import yaml, random
 import fiftyone as fo
 import fiftyone.zoo as foz
+from fiftyone import ViewField as F
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -24,16 +25,19 @@ dataset = foz.load_zoo_dataset(
 )
 
 dataset.persistent = True
-predictions_view = dataset.take(1, seed=50)
+view = dataset.filter_labels("ground_truth", F("label").is_in(("cat", "dog")))
+
+predictions_view = view.take(1, seed=63)
 
 # Get class list
-classes = dataset.default_classes
-fil_classes = []
-for class_idx in classes:
-    if not class_idx.isnumeric():
-        fil_classes.append(class_idx)
+# classes = dataset.default_classes
+# fil_classes = []
+# for class_idx in classes:
+#     if not class_idx.isnumeric() and class_idx in ["cat", "dog"]:
+#         fil_classes.append(class_idx)
 # sys.exit()
 # print(len(fil_classes))
+fil_classes = ["cat", "dog"]
 device = torch.device('cuda:0')
 
 with open("hyp.yaml", "r") as stream:
@@ -46,26 +50,38 @@ model = Darknet('yolov3.cfg', hyp).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(),1e-3)
 
-transforms = transforms.Compose([transforms.Resize((320,320))])
+org_w = 640
+org_h = 480
+
+scaling_factor = 640/480
+
+
 loss_fcn = ComputeLoss(model)
 # Add predictions to samples\
 epochs = 100
 for epoch in range(epochs):
+    tot_loss = 0
+    count = 0
     with fo.ProgressBar() as pb:
         for sample in pb(predictions_view):
             model.train()
             optimizer.zero_grad()
-
+            # print(sample.ground_truth.detections)
             # create targets [img_id, class_idx, bboxes(x, y, w, h)]
             target = sample.ground_truth.detections[0]
             cur_class = fil_classes.index(target.label)
             bbox = target.bounding_box
+            # print(bbox)
+            bbox[0] = bbox[0] + bbox[2]/2
+            bbox[1] = bbox[1] + bbox[3]/2
             tmp = np.append(0, cur_class)
             tar = np.append(tmp, bbox)
             targets = torch.tensor(tar)[None,:]
             for target in sample.ground_truth.detections[1:]:
                 cur_class = fil_classes.index(target.label)
                 bbox = target.bounding_box
+                bbox[0] = bbox[0] + bbox[2]/2
+                bbox[1] = bbox[1] + bbox[3]/2
                 tmp = np.append(0, cur_class)
                 tar = np.append(tmp, bbox)
                 curr_target = torch.tensor(tar)[None,:]
@@ -73,7 +89,10 @@ for epoch in range(epochs):
 
             targets = targets.to(device)
             img_org = Image.open(sample.filepath)
-            image = transforms(img_org)
+            height, width = img_org.size
+            transform = transforms.Compose([transforms.Resize((int(org_h/scaling_factor), int(org_w/scaling_factor))),
+                                            transforms.Pad((0, int((org_w - org_h)/(2*scaling_factor)),0,int((org_w - org_h)/(2*scaling_factor))))])
+            image = transform(img_org)
             image = func.to_tensor(image).to(device)
             c, h, w = image.shape
             image = image[None,:]
@@ -81,10 +100,11 @@ for epoch in range(epochs):
             preds = model(image)
             # calc loss
             loss, loss_parts = loss_fcn(preds, targets)
-            print(epoch, loss.item())
+            tot_loss += loss
+            count += 1
             loss.backward()
             optimizer.step()
-
+        print(epoch, tot_loss.item()/count)
 
         # labels = preds["labels"].cpu().detach().numpy()
         # scores = preds["scores"].cpu().detach().numpy()
@@ -109,10 +129,12 @@ for epoch in range(epochs):
         # sample["faster_rcnn"] = fo.Detections(detections=detections)
         # sample.save()
 
-
+print(sample.ground_truth.detections)
 model.eval()
 pred = model(image)
+print(pred[0,0])
 detections = non_max_suppression(pred, conf_thres=0.7, iou_thres=0.1,max_det=300)[0].cpu().detach().numpy()
+
 
 img = image[0,:].cpu().detach().numpy().transpose(1,2,0)
 plt.figure()
@@ -128,9 +150,11 @@ bbox_colors = random.sample(colors, n_cls_preds)
 for x1, y1, x2, y2, conf, cls_pred in detections:
 
     print(f"\t+ Label: {fil_classes[int(cls_pred)]} | Confidence: {conf.item():0.4f}")
+    
+    x1, y1, x2, y2 = x1*scaling_factor, y1*scaling_factor, x2*scaling_factor, y2*scaling_factor
 
-    box_w = x2 - x1
-    box_h = y2 - y1
+    box_w = (x2 - x1)
+    box_h = (y2 - y1)
     color = bbox_colors[int(np.where(unique_labels == int(cls_pred))[0])]
     # Create a Rectangle patch
     bbox = patches.Rectangle((x1, y1), box_w, box_h, linewidth=2, edgecolor=color, facecolor="none")
