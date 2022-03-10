@@ -6,7 +6,65 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 import cv2, torchvision
+from matplotlib.colors import ListedColormap
+import matplotlib.pyplot as plt
+import random
+import matplotlib.patches as patches
+from matplotlib.ticker import NullLocator
 
+def plot(x1,x2,name1,name2,ylabel,title):
+    n = len(x1)
+    plt.figure(figsize=(10, 10))
+    plt.rcParams.update({'font.size': 22})
+    plt.plot(np.arange(n),x1,label=name1 ,color = "blue")
+    plt.plot(np.arange(n),x2,label=name2,color = "red")
+    plt.xlabel("Epochs")
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.legend()
+    plt.show()
+def my_img_plot(pred,img,fil_classes,scaling_factor):
+  
+    detections = non_max_suppression(pred, conf_thres=0.7, iou_thres=0.1,max_det=300)[0].cpu().detach().numpy()
+    img = img.cpu().detach().numpy().transpose(1,2,0)
+    plt.figure()
+    fig, ax = plt.subplots(1)
+    ax.imshow(img)
+    # Rescale boxes to original image
+    unique_labels = np.unique(detections[:, -1])
+    n_cls_preds = len(unique_labels)
+    # Bounding-box colors
+    cmap = plt.get_cmap("tab20b")
+    colors = [cmap(i) for i in np.linspace(0, 1, n_cls_preds)]
+    bbox_colors = random.sample(colors, n_cls_preds)
+
+    for x1, y1, x2, y2, conf, cls_pred in detections:
+
+        print(f"\t+ Label: {fil_classes[int(cls_pred)]} | Confidence: {conf.item():0.4f}")
+        
+        x1, y1, x2, y2 = x1*scaling_factor, y1*scaling_factor, x2*scaling_factor, y2*scaling_factor
+
+        box_w = (x2 - x1)
+        box_h = (y2 - y1)
+        color = bbox_colors[int(np.where(unique_labels == int(cls_pred))[0])]
+        # Create a Rectangle patch
+        bbox = patches.Rectangle((x1, y1), box_w, box_h, linewidth=2, edgecolor=color, facecolor="none")
+        # Add the bbox to the plot
+        ax.add_patch(bbox)
+        # Add label
+        plt.text(
+            x1,
+            y1,
+            s=fil_classes[int(cls_pred)],
+            color="white",
+            verticalalignment="top",
+            bbox={"color": color, "pad": 0})
+
+        # Save generated image with detections
+    plt.axis("off")
+    plt.gca().xaxis.set_major_locator(NullLocator())
+    plt.gca().yaxis.set_major_locator(NullLocator())
+    plt.show()
 def box_iou(box1, box2):
     # https://github.com/pytorch/vision/blob/master/torchvision/ops/boxes.py
     """

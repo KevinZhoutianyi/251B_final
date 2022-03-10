@@ -1,3 +1,4 @@
+# %%
 import numpy as np
 import torch, sys
 from torchvision.transforms import functional as func
@@ -16,17 +17,34 @@ from torch.utils.data import DataLoader
 from dataloader import FiftyOneTorchDataset
 from util import non_max_suppression
 
-dataset = foz.load_zoo_dataset(
+
+# %%
+dataset_train = foz.load_zoo_dataset(
     "coco-2017",
-    split="validation",
+    split="train",
     # label_types=[""],
     classes=["cat", "dog"],
     max_samples=128,
 )
 
-dataset.persistent = True
-view = dataset.filter_labels("ground_truth", F("label").is_in(("cat", "dog")))
-predictions_view = view.take(128, seed=63)
+# %%
+
+dataset_validation = foz.load_zoo_dataset(
+    "coco-2017",
+    split="validation",
+    # label_types=[""],
+    classes=["cat", "dog"],
+    max_samples=64,
+)
+
+# %%
+
+dataset_train.persistent = True
+dataset_validation.persistent = True
+view_train = dataset_train.filter_labels("ground_truth", F("label").is_in(("cat", "dog")))
+view_val = dataset_validation.filter_labels("ground_truth", F("label").is_in(("cat", "dog")))
+view_train = view_train.take(128, seed=63)
+view_val = view_val.take(64, seed=63)
 
 fil_classes = ["cat", "dog"]
 device = torch.device('cuda:0')
@@ -37,8 +55,6 @@ with open("hyp.yaml", "r") as stream:
     except yaml.YAMLError as exc:
         print(exc)
 
-model = Model('yolov3.cfg', hyp=hyp).to(device)
-optimizer = torch.optim.Adam(model.parameters(),1e-3)
 
 org_w = 640
 org_h = 480
@@ -50,16 +66,30 @@ transform = transforms.Compose([transforms.Resize((int(org_h/scaling_factor), in
                                 transforms.Pad((0, int((org_w - org_h)/(2*scaling_factor)),0,int((org_w - org_h)/(2*scaling_factor)))),
                                 transforms.ToTensor()])
             
-dataset = FiftyOneTorchDataset(predictions_view, transform, classes=fil_classes)
-train_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
+dataset_train = FiftyOneTorchDataset(view_train, transform, classes=fil_classes)
+dataset_val = FiftyOneTorchDataset(view_val, transform, classes=fil_classes)
+loader_train = DataLoader(dataset=dataset_train, batch_size=batch_size, shuffle=True)
+loader_val = DataLoader(dataset=dataset_val, batch_size=batch_size, shuffle=True)
 
+
+
+# %%
+
+model = Model('yolov3.cfg', hyp=hyp).to(device)
+
+optimizer = torch.optim.Adam(model.parameters(),1e-3)
 loss_fcn = ComputeLoss(model)
+#training
+train_loss_list = []
+val_loss_list = []
 # Add predictions to samples\
-epochs = 1000
+epochs = 10
 for epoch in range(epochs):
+    #training
     tot_loss = 0
     count = 0
-    for images, targets in train_loader:
+    for images, targets in loader_train:
+        model.train()
         images = images.to(device)
         targets = targets.to(device)
         preds = model(images)
@@ -68,53 +98,64 @@ for epoch in range(epochs):
         count += 1
         loss.backward()
         optimizer.step()
-    print(epoch, tot_loss.item()/count)
+        
+    #save the model each 50 epochs
+    if epoch%5==0 and epoch!=0:
+        torch.save(model,'./models/model'+str(epoch)+'.pt')
+    print('training',epoch, tot_loss.item()/count)
+    train_loss_list.append(tot_loss.item()/count)
+    
+    #validation
+    tot_loss = 0
+    count = 0
+    for images, targets in loader_val:
+        images = images.to(device)
+        targets = targets.to(device)
+        with torch.no_grad():
+            preds = model(images)
+        loss, loss_parts = loss_fcn(preds, targets)
+        tot_loss += loss / batch_size
+        count += 1
+    print('validation',epoch, tot_loss.item()/count)
+    val_loss_list.append(tot_loss.item()/count)
+
+torch.save(model,'./models/final'+'.pt')    
 
 
 #  TODO: val code, val dataloader, save model, save training loss
 
-print(sample.ground_truth.detections)
+
+
+# %%
+from util import plot
+plot(train_loss_list[:],val_loss_list,'train loss','val loss','loss','train loss and validation loss')
+
+# %%
+from util import my_img_plot
+import gc
+gc.collect() 
+torch.cuda.empty_cache()
+device = torch.device('cuda:0')
+model = torch.load('./models/final.pt').to(device)
+
+
+
+
+# %%
+
 model.eval()
-pred = model(image)
-print(pred[0,0])
-detections = non_max_suppression(pred, conf_thres=0.7, iou_thres=0.1,max_det=300)[0].cpu().detach().numpy()
+for images, targets in loader_val:
+    # for image in images:
+    images = images.to(device)
+    with torch.no_grad():
+        pred = model(images)
+        print(len(pred))
+        print(pred[0].shape)
+        print(images[0].shape)
+        my_img_plot(pred[0],images[0],fil_classes,1)
+    # break
+
+# %%
 
 
-img = image[0,:].cpu().detach().numpy().transpose(1,2,0)
-plt.figure()
-fig, ax = plt.subplots(1)
-ax.imshow(img_org)
-# Rescale boxes to original image
-unique_labels = np.unique(detections[:, -1])
-n_cls_preds = len(unique_labels)
-# Bounding-box colors
-cmap = plt.get_cmap("tab20b")
-colors = [cmap(i) for i in np.linspace(0, 1, n_cls_preds)]
-bbox_colors = random.sample(colors, n_cls_preds)
-for x1, y1, x2, y2, conf, cls_pred in detections:
 
-    print(f"\t+ Label: {fil_classes[int(cls_pred)]} | Confidence: {conf.item():0.4f}")
-    
-    x1, y1, x2, y2 = x1*scaling_factor, y1*scaling_factor, x2*scaling_factor, y2*scaling_factor
-
-    box_w = (x2 - x1)
-    box_h = (y2 - y1)
-    color = bbox_colors[int(np.where(unique_labels == int(cls_pred))[0])]
-    # Create a Rectangle patch
-    bbox = patches.Rectangle((x1, y1), box_w, box_h, linewidth=2, edgecolor=color, facecolor="none")
-    # Add the bbox to the plot
-    ax.add_patch(bbox)
-    # Add label
-    plt.text(
-        x1,
-        y1,
-        s=fil_classes[int(cls_pred)],
-        color="white",
-        verticalalignment="top",
-        bbox={"color": color, "pad": 0})
-
-# Save generated image with detections
-plt.axis("off")
-plt.gca().xaxis.set_major_locator(NullLocator())
-plt.gca().yaxis.set_major_locator(NullLocator())
-plt.show()
