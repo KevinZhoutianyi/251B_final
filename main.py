@@ -43,8 +43,8 @@ dataset_train.persistent = True
 dataset_validation.persistent = True
 view_train = dataset_train.filter_labels("ground_truth", F("label").is_in(("cat", "dog")))
 view_val = dataset_validation.filter_labels("ground_truth", F("label").is_in(("cat", "dog")))
-view_train = view_train.take(128, seed=63)
-view_val = view_val.take(64, seed=63)
+view_train = view_train.take(2, seed=61)
+view_val = view_val.take(2, seed=61)
 
 fil_classes = ["cat", "dog"]
 device = torch.device('cuda:0')
@@ -60,7 +60,7 @@ org_w = 640
 org_h = 480
 scaling_factor = 640/480
 
-batch_size = 8
+batch_size = 2
 
 transform = transforms.Compose([transforms.Resize((int(org_h/scaling_factor), int(org_w/scaling_factor))),
                                 transforms.Pad((0, int((org_w - org_h)/(2*scaling_factor)),0,int((org_w - org_h)/(2*scaling_factor)))),
@@ -83,13 +83,14 @@ loss_fcn = ComputeLoss(model)
 train_loss_list = []
 val_loss_list = []
 # Add predictions to samples\
-epochs = 10
+epochs = 100
 for epoch in range(epochs):
     #training
     tot_loss = 0
     count = 0
     for images, targets in loader_train:
         model.train()
+        optimizer.zero_grad()
         images = images.to(device)
         targets = targets.to(device)
         preds = model(images)
@@ -100,7 +101,7 @@ for epoch in range(epochs):
         optimizer.step()
         
     #save the model each 50 epochs
-    if epoch%5==0 and epoch!=0:
+    if epoch%50==0 and epoch!=0:
         torch.save(model,'./models/model'+str(epoch)+'.pt')
     print('training',epoch, tot_loss.item()/count)
     train_loss_list.append(tot_loss.item()/count)
@@ -113,14 +114,17 @@ for epoch in range(epochs):
         targets = targets.to(device)
         with torch.no_grad():
             preds = model(images)
-        loss, loss_parts = loss_fcn(preds, targets)
-        tot_loss += loss / batch_size
+            loss, loss_parts = loss_fcn(preds, targets)
+            tot_loss += loss / batch_size
         count += 1
     print('validation',epoch, tot_loss.item()/count)
     val_loss_list.append(tot_loss.item()/count)
 
 torch.save(model,'./models/final'+'.pt')    
 
+from util import my_load,my_save
+my_save('trainloss',train_loss_list)
+my_save('validationloss',val_loss_list)
 
 #  TODO: val code, val dataloader, save model, save training loss
 
@@ -128,7 +132,7 @@ torch.save(model,'./models/final'+'.pt')
 
 # %%
 from util import plot
-plot(train_loss_list[:],val_loss_list,'train loss','val loss','loss','train loss and validation loss')
+plot(train_loss_list,val_loss_list,'train loss','val loss','loss','train loss and validation loss')
 
 # %%
 from util import my_img_plot
@@ -144,7 +148,7 @@ model = torch.load('./models/final.pt').to(device)
 # %%
 
 model.eval()
-for images, targets in loader_val:
+for images, targets in loader_train:
     # for image in images:
     images = images.to(device)
     with torch.no_grad():

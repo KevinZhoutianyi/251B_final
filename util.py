@@ -12,6 +12,19 @@ import random
 import matplotlib.patches as patches
 from matplotlib.ticker import NullLocator
 
+def my_save(name,obj):
+    name = './repData/' + name
+    import pickle
+    data = obj
+    f = open(name, 'wb')
+    pickle.dump(data, f)
+
+def my_load(name):
+    import pickle
+    name = './repData/' + name
+    f = open(name, 'rb')
+    r = pickle.load(f)
+    return r
 def plot(x1,x2,name1,name2,ylabel,title):
     n = len(x1)
     plt.figure(figsize=(10, 10))
