@@ -54,8 +54,6 @@ def my_img_plot(pred,img,fil_classes,scaling_factor):
     for x1, y1, x2, y2, conf, cls_pred in detections:
 
         print(f"\t+ Label: {fil_classes[int(cls_pred)]} | Confidence: {conf.item():0.4f}")
-        
-        x1, y1, x2, y2 = x1*scaling_factor, y1*scaling_factor, x2*scaling_factor, y2*scaling_factor
 
         box_w = (x2 - x1)
         box_h = (y2 - y1)
