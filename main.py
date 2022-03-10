@@ -1,7 +1,5 @@
-from darknet import Darknet
 import numpy as np
 import torch, sys
-from PIL import Image
 from torchvision.transforms import functional as func
 import torchvision.transforms as transforms
 from loss import ComputeLoss
@@ -9,11 +7,13 @@ import yaml, random
 import fiftyone as fo
 import fiftyone.zoo as foz
 from fiftyone import ViewField as F
-
+from new_model import Model
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.ticker import NullLocator
+from torch.utils.data import DataLoader
 
+from dataloader import FiftyOneTorchDataset
 from util import non_max_suppression
 
 dataset = foz.load_zoo_dataset(
@@ -21,22 +21,13 @@ dataset = foz.load_zoo_dataset(
     split="validation",
     # label_types=[""],
     classes=["cat", "dog"],
-    max_samples=25,
+    max_samples=128,
 )
 
 dataset.persistent = True
 view = dataset.filter_labels("ground_truth", F("label").is_in(("cat", "dog")))
+predictions_view = view.take(128, seed=63)
 
-predictions_view = view.take(1, seed=63)
-
-# Get class list
-# classes = dataset.default_classes
-# fil_classes = []
-# for class_idx in classes:
-#     if not class_idx.isnumeric() and class_idx in ["cat", "dog"]:
-#         fil_classes.append(class_idx)
-# sys.exit()
-# print(len(fil_classes))
 fil_classes = ["cat", "dog"]
 device = torch.device('cuda:0')
 
@@ -46,88 +37,41 @@ with open("hyp.yaml", "r") as stream:
     except yaml.YAMLError as exc:
         print(exc)
 
-model = Darknet('yolov3.cfg', hyp).to(device)
-
+model = Model('yolov3.cfg', hyp=hyp).to(device)
 optimizer = torch.optim.Adam(model.parameters(),1e-3)
 
 org_w = 640
 org_h = 480
-
 scaling_factor = 640/480
 
+batch_size = 8
+
+transform = transforms.Compose([transforms.Resize((int(org_h/scaling_factor), int(org_w/scaling_factor))),
+                                transforms.Pad((0, int((org_w - org_h)/(2*scaling_factor)),0,int((org_w - org_h)/(2*scaling_factor)))),
+                                transforms.ToTensor()])
+            
+dataset = FiftyOneTorchDataset(predictions_view, transform, classes=fil_classes)
+train_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
 
 loss_fcn = ComputeLoss(model)
 # Add predictions to samples\
-epochs = 100
+epochs = 1000
 for epoch in range(epochs):
     tot_loss = 0
     count = 0
-    with fo.ProgressBar() as pb:
-        for sample in pb(predictions_view):
-            model.train()
-            optimizer.zero_grad()
-            # print(sample.ground_truth.detections)
-            # create targets [img_id, class_idx, bboxes(x, y, w, h)]
-            target = sample.ground_truth.detections[0]
-            cur_class = fil_classes.index(target.label)
-            bbox = target.bounding_box
-            # print(bbox)
-            bbox[0] = bbox[0] + bbox[2]/2
-            bbox[1] = bbox[1] + bbox[3]/2
-            tmp = np.append(0, cur_class)
-            tar = np.append(tmp, bbox)
-            targets = torch.tensor(tar)[None,:]
-            for target in sample.ground_truth.detections[1:]:
-                cur_class = fil_classes.index(target.label)
-                bbox = target.bounding_box
-                bbox[0] = bbox[0] + bbox[2]/2
-                bbox[1] = bbox[1] + bbox[3]/2
-                tmp = np.append(0, cur_class)
-                tar = np.append(tmp, bbox)
-                curr_target = torch.tensor(tar)[None,:]
-                targets = torch.vstack((targets, curr_target))
+    for images, targets in train_loader:
+        images = images.to(device)
+        targets = targets.to(device)
+        preds = model(images)
+        loss, loss_parts = loss_fcn(preds, targets)
+        tot_loss += loss / batch_size
+        count += 1
+        loss.backward()
+        optimizer.step()
+    print(epoch, tot_loss.item()/count)
 
-            targets = targets.to(device)
-            img_org = Image.open(sample.filepath)
-            height, width = img_org.size
-            transform = transforms.Compose([transforms.Resize((int(org_h/scaling_factor), int(org_w/scaling_factor))),
-                                            transforms.Pad((0, int((org_w - org_h)/(2*scaling_factor)),0,int((org_w - org_h)/(2*scaling_factor))))])
-            image = transform(img_org)
-            image = func.to_tensor(image).to(device)
-            c, h, w = image.shape
-            image = image[None,:]
-            # Perform inference
-            preds = model(image)
-            # calc loss
-            loss, loss_parts = loss_fcn(preds, targets)
-            tot_loss += loss
-            count += 1
-            loss.backward()
-            optimizer.step()
-        print(epoch, tot_loss.item()/count)
 
-        # labels = preds["labels"].cpu().detach().numpy()
-        # scores = preds["scores"].cpu().detach().numpy()
-        # boxes = preds["boxes"].cpu().detach().numpy()
-        # # Convert detections to FiftyOne format
-        # detections = []
-        # for label, score, box in zip(labels, scores, boxes):
-        #     # Convert to [top-left-x, top-left-y, width, height]
-        #     # in relative coordinates in [0, 1] x [0, 1]
-        #     x1, y1, x2, y2 = box
-        #     rel_box = [x1 / w, y1 / h, (x2 - x1) / w, (y2 - y1) / h]
-
-        #     detections.append(
-        #         fo.Detection(
-        #             label=classes[label],
-        #             bounding_box=rel_box,
-        #             confidence=score
-        #         )
-        #     )
-
-        # # Save predictions to dataset
-        # sample["faster_rcnn"] = fo.Detections(detections=detections)
-        # sample.save()
+#  TODO: val code, val dataloader, save model, save training loss
 
 print(sample.ground_truth.detections)
 model.eval()

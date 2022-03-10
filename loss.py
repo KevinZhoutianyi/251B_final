@@ -162,6 +162,16 @@ class ComputeLoss:
                                     [[ 3.62500,  2.81250],
                                     [ 4.87500,  6.18750],
                                     [11.65625, 10.18750]]]).to(torch.device('cuda:0'))
+        # self.anchors = torch.tensor([[  [10,13],
+        #                                 [16,30],  
+        #                                 [33,23]], 
+        #                                 [[30,61],  
+        #                                 [62,45],  
+        #                                 [59,119]],  
+        #                                 [[116,90],  
+        #                                 [156,198],  
+        #                                 [373,326]]])/608
+        # self.anchors = self.anchors.to(torch.device('cuda:0'))
         self.nl = 3
 
     def __call__(self, p, targets):  # predictions, targets, model
