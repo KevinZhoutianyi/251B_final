@@ -1,7 +1,4 @@
-# YOLOv3 🚀 by Ultralytics, GPL-3.0 license
-"""
-Loss functions
-"""
+# Tutorial: https://github.com/ultralytics/yolov3
 
 import torch, math
 import torch.nn as nn

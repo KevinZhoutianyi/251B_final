@@ -1,3 +1,5 @@
+# Tutorial: https://colab.research.google.com/github/voxel51/fiftyone-examples/blob/master/examples/pytorch_detection_training.ipynb#scrollTo=IRR2fVMlWeKI
+
 import torch
 import fiftyone.utils.coco as fouc
 from PIL import Image
