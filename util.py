@@ -76,6 +76,7 @@ def my_img_plot(pred,img,fil_classes,scaling_factor):
     plt.gca().xaxis.set_major_locator(NullLocator())
     plt.gca().yaxis.set_major_locator(NullLocator())
     plt.show()
+    
 def box_iou(box1, box2):
     # https://github.com/pytorch/vision/blob/master/torchvision/ops/boxes.py
     """
