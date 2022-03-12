@@ -44,15 +44,44 @@ class FiftyOneTorchDataset(torch.utils.data.Dataset):
         sample = self.samples[img_path]
         img = Image.open(img_path).convert("RGB")
 
-        target = sample.ground_truth.detections[0]
-        cur_class = self.labels_map_rev[target.label]
-        bbox = target.bounding_box
+        #target = sample.ground_truth.detections[0]
+        
+        targets = sample.ground_truth.detections
+        
+        boxes = []
+        labels = []
+        
+        for tar in targets:
+            tar_id = self.labels_map_rev[tar.label]
+
+            bbox = tar.bounding_box
+            
+            bbox[0] = bbox[0] + bbox[2]/2
+            bbox[1] = bbox[1] + bbox[3]/2
+            
+            boxes.append(bbox)
+            labels.append(tar_id)
+        
+                
+                
+        #cur_class = self.labels_map_rev[target.label]
+        #bbox = target.bounding_box
         # print(bbox)
-        bbox[0] = bbox[0] + bbox[2]/2
-        bbox[1] = bbox[1] + bbox[3]/2
-        tmp = np.append(0, cur_class)
-        tar = np.append(tmp, bbox)
-        target = torch.tensor(tar)
+        #bbox[0] = bbox[0] + bbox[2]/2
+        #bbox[1] = bbox[1] + bbox[3]/2
+        
+        
+        
+        target = {}
+        target["boxes"] = torch.as_tensor(boxes, dtype=torch.float32)
+        target["labels"] = torch.as_tensor(labels, dtype=torch.int64)
+        target["image_id"] = torch.as_tensor([idx])
+               
+        #tmp = np.append(0, cur_class)
+        #tar = np.append(tmp, bbox)
+                
+                
+        #target = torch.tensor(tar)
 
         if self.transforms is not None:
             img = self.transforms(img)
@@ -64,3 +93,24 @@ class FiftyOneTorchDataset(torch.utils.data.Dataset):
 
     def get_classes(self):
         return self.classes
+    
+    
+    
+def collate_fn(batch):
+    data = [item[0] for item in batch]
+    target = [item[1] for item in batch]
+    
+    data = torch.stack(data)
+
+    tar_out = []
+    for tar_idx, tar in enumerate(target):
+
+        boxes = tar['boxes']
+        clss = tar['labels']
+        for box, cls in zip(boxes, clss):
+            
+            tar_out.append(torch.cat([torch.Tensor([tar_idx]), cls.view([1]), box]))
+            
+    tar_out = torch.stack(tar_out)
+        
+    return [data, tar_out]
