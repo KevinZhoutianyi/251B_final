@@ -74,5 +74,17 @@ Creating Mini-MDOD:
 Creating 2 Class Mini-MDOD:
 - src/lib/external/dataset/coco.py
 - src/lib/dataset/coco.py
+```
 
+Running Code
+--------
+```
+Download Coco Images and Annotations:
+https://cocodataset.org/#download
+
+Run Mini-MDOD - 80 Classes:
+run/run_mdod_coco80.sh
+
+Run Mini-MDOD - 2 Classes:
+run/run_mdod_coco2.sh
 ```

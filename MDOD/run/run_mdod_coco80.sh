@@ -2,23 +2,23 @@
 
 python3 ./src/run.py \
 --bash_file="./run/run_mdod_coco.sh" \
---result_dir="./result/mdod/coco/test160" \
+--result_dir="./result/mdod/coco/class80" \
 \
 --run_args="{
     'devices': [0], 'port': 12355, 'sync_bnorm': False,
     'max_grad': 7, 'grad_accum': 1, 'amp': False,
 
-    'init_epoch': 101, 'max_epoch': 160, 'print_intv': 10,
+    'init_epoch': 0, 'max_epoch': 5, 'print_intv': 10,
     'lr_decay_schd': {120: 0.1, 150: 0.1},
     'loss_args_schd': {},
     'test_epoch_list': [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160],
     'save_epoch_list': [20, 40, 60, 80, 100, 120, 140, 150, 160],
 
-    'write_log': False, 'load_dir': result/mdod/coco/test100/snapshot/100/,
+    'write_log': False, 'load_dir': None,
     'manually_shuffle': True,
 }" \
 --global_args="{
-    'n_classes': 3, 'img_h': 320, 'img_w': 320, 'coord_scale_factor': 32,  'xywh_box': False,
+    'n_classes': 81, 'img_h': 320, 'img_w': 320, 'coord_scale_factor': 32,  'xywh_box': False,
 }" \
 --framework_info="{
     'framework': 'basic',
@@ -75,7 +75,7 @@ python3 ./src/run.py \
         },
         'grouping': False,
     },
-    'shuffle': False, 'num_workers': 2, 'batch_size': 4,
+    'shuffle': False, 'num_workers': 2, 'batch_size': 8,
 }" \
 --test_data_loader_info="{
     'dataset': 'coco',
