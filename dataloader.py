@@ -1,5 +1,6 @@
-# Tutorial: https://colab.research.google.com/github/voxel51/fiftyone-examples/blob/master/examples/pytorch_detection_training.ipynb#scrollTo=IRR2fVMlWeKI
-
+# We took the following tutorial to implement the Dataloader for FiftyOneTorch and changed it so 
+# it can be used for our model. The link for the tutorial is
+# https://colab.research.google.com/github/voxel51/fiftyone-examples/blob/master/examples/pytorch_detection_training.ipynb#scrollTo=IRR2fVMlWeKI
 import torch
 import fiftyone.utils.coco as fouc
 from PIL import Image
@@ -16,7 +17,6 @@ class FiftyOneTorchDataset(torch.utils.data.Dataset):
         classes (None): a list of class strings that are used to define the mapping between
             class names and indices. If None, it will use all classes present in the given fiftyone_dataset.
     """
-
     def __init__(
         self,
         fiftyone_dataset,
@@ -44,8 +44,7 @@ class FiftyOneTorchDataset(torch.utils.data.Dataset):
         sample = self.samples[img_path]
         img = Image.open(img_path).convert("RGB")
 
-        #target = sample.ground_truth.detections[0]
-        
+        # Get all the bounding boxes.
         targets = sample.ground_truth.detections
         
         boxes = []
@@ -62,26 +61,10 @@ class FiftyOneTorchDataset(torch.utils.data.Dataset):
             boxes.append(bbox)
             labels.append(tar_id)
         
-                
-                
-        #cur_class = self.labels_map_rev[target.label]
-        #bbox = target.bounding_box
-        # print(bbox)
-        #bbox[0] = bbox[0] + bbox[2]/2
-        #bbox[1] = bbox[1] + bbox[3]/2
-        
-        
-        
         target = {}
         target["boxes"] = torch.as_tensor(boxes, dtype=torch.float32)
         target["labels"] = torch.as_tensor(labels, dtype=torch.int64)
         target["image_id"] = torch.as_tensor([idx])
-               
-        #tmp = np.append(0, cur_class)
-        #tar = np.append(tmp, bbox)
-                
-                
-        #target = torch.tensor(tar)
 
         if self.transforms is not None:
             img = self.transforms(img)
@@ -93,8 +76,6 @@ class FiftyOneTorchDataset(torch.utils.data.Dataset):
 
     def get_classes(self):
         return self.classes
-    
-    
     
 def collate_fn(batch):
     data = [item[0] for item in batch]

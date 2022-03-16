@@ -1,4 +1,5 @@
-# YOLOv3 🚀 by Ultralytics, GPL-3.0 license
+# We used the following yaml file from Ultralytics. 
+# https://github.com/ultralytics/yolov3
 
 # Parameters
 ch: 3 # number of channels

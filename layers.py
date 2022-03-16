@@ -1,3 +1,4 @@
+# The following code was adapted from https://github.com/ultralytics/yolov3 to build our model.
 import torch
 import torch.nn as nn
 

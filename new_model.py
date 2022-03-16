@@ -1,11 +1,12 @@
-# Tutorial: https://github.com/ultralytics/yolov3
-
+# We used the following tutorail from Ultralytics in order to implement our simplified version of YoloV3 model
+# so that it could be trained in Datahub. The link to the github is https://github.com/ultralytics/yolov3.
 import numpy as np
 import torch
 import torch.nn as nn
 from layers import *
 import yaml, math
 
+# Initialize the weights.
 def initialize_weights(model):
     for m in model.modules():
         t = type(m)
@@ -17,6 +18,7 @@ def initialize_weights(model):
         elif t in [nn.LeakyReLU, nn.ReLU, nn.SiLU]:
             m.inplace = True
 
+# Parse the model hyperparameters.
 def parse_model(config):
     anchors = config['anchors']
     nc = config['nc']
@@ -37,7 +39,6 @@ def parse_model(config):
             in_ch, out_ch = ch[from_layer], args[0]
             if out_ch != no:
                 out_ch = math.ceil(out_ch / 8) * 8
-
             args = [in_ch, out_ch, *args[1:]]
 
         elif layer is Concat:
@@ -47,7 +48,6 @@ def parse_model(config):
             args.append([ch[x] for x in from_layer])
 
         m_ = nn.Sequential(*(layer(*args) for _ in range(num))) if num > 1 else layer(*args)
-        # print(i, m_, args, from_layer)
         layers.append(m_)
         m_.i, m_.from_layer= i, from_layer
         if i == 0:
@@ -114,7 +114,6 @@ class Model(nn.Module):
             self._initialize_biases()
         initialize_weights(self)
 
-
     def forward(self, x):
         y, dt = [], []  # outputs
         for m in self.model:
@@ -122,24 +121,15 @@ class Model(nn.Module):
             # print(m)
             if m.from_layer != -1:  # if not from previous layer
                 x = y[m.from_layer] if isinstance(m.from_layer, int) else [x if j == -1 else y[j] for j in m.from_layer]  # from earlier layers
-            # print(x.shape)
-            # print()
             x = m(x)  # run
             y.append(x)
         return x
 
     def _initialize_biases(self, cf=None):  # initialize biases into Detect(), cf is class frequency
         # https://arxiv.org/abs/1708.02002 section 3.3
-        # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1.
         m = self.model[-1]  # Detect() module
         for mi, s in zip(m.m, m.stride):  # from
             b = mi.bias.view(m.na, -1)  # conv.bias(255) to (3,85)
             b.data[:, 4] += math.log(8 / (640 / s) ** 2)  # obj (8 objects per 640 image)
             b.data[:, 5:] += math.log(0.6 / (m.nc - 0.999999)) if cf is None else torch.log(cf / cf.sum())  # cls
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
-
-
-if __name__=="__main__":
-    m = Model('./models/yolov3.yaml', None)
-    x = torch.zeros((1, 3, 320, 320))
-    m(x)

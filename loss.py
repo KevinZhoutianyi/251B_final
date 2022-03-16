@@ -1,10 +1,6 @@
-# Tutorial: https://github.com/ultralytics/yolov3
-
+# The following code was adapted from https://github.com/ultralytics/yolov3.
 import torch, math
 import torch.nn as nn
-
-# from utils.metrics import bbox_iou
-# from utils.torch_utils import is_parallel
 
 def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7):
     # Returns the IoU of box1 to box2. box1 is 4, box2 is nx4
@@ -54,7 +50,6 @@ def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#iss
     # return positive, negative label smoothing BCE targets
     return 1.0 - 0.5 * eps, 0.5 * eps
 
-
 class BCEBlurWithLogitsLoss(nn.Module):
     # BCEwithLogitLoss() with reduced missing label effects.
     def __init__(self, alpha=0.05):
@@ -70,7 +65,6 @@ class BCEBlurWithLogitsLoss(nn.Module):
         alpha_factor = 1 - torch.exp((dx - 1) / (self.alpha + 1e-4))
         loss *= alpha_factor
         return loss.mean()
-
 
 class FocalLoss(nn.Module):
     # Wraps focal loss around existing loss_fcn(), i.e. criteria = FocalLoss(nn.BCEWithLogitsLoss(), gamma=1.5)
@@ -101,7 +95,6 @@ class FocalLoss(nn.Module):
         else:  # 'none'
             return loss
 
-
 class QFocalLoss(nn.Module):
     # Wraps Quality focal loss around existing loss_fcn(), i.e. criteria = FocalLoss(nn.BCEWithLogitsLoss(), gamma=1.5)
     def __init__(self, loss_fcn, gamma=1.5, alpha=0.25):
@@ -127,7 +120,6 @@ class QFocalLoss(nn.Module):
         else:  # 'none'
             return loss
 
-
 class ComputeLoss:
     # Compute losses
     def __init__(self, model, autobalance=False):
@@ -149,7 +141,7 @@ class ComputeLoss:
         self.ssi = 0  # stride 16 index
         self.BCEcls, self.BCEobj, self.gr, self.hyp, self.autobalance = BCEcls, BCEobj, 1.0, h, autobalance
         self.na = 3
-        self.nc = 2 # TODO: classes
+        self.nc = 2
         self.anchors = torch.tensor([[[ 1.25000,  1.62500],
                                     [ 2.00000,  3.75000],
                                     [ 4.12500,  2.87500]],
@@ -159,16 +151,6 @@ class ComputeLoss:
                                     [[ 3.62500,  2.81250],
                                     [ 4.87500,  6.18750],
                                     [11.65625, 10.18750]]]).to(torch.device('cuda:0'))
-        # self.anchors = torch.tensor([[  [10,13],
-        #                                 [16,30],  
-        #                                 [33,23]], 
-        #                                 [[30,61],  
-        #                                 [62,45],  
-        #                                 [59,119]],  
-        #                                 [[116,90],  
-        #                                 [156,198],  
-        #                                 [373,326]]])/608
-        # self.anchors = self.anchors.to(torch.device('cuda:0'))
         self.nl = 3
 
     def __call__(self, p, targets):  # predictions, targets, model
@@ -206,10 +188,6 @@ class ComputeLoss:
                     t[range(n), tcls[i]] = self.cp
                     lcls += self.BCEcls(ps[:, 5:], t)  # BCE
 
-                # Append targets to text file
-                # with open('targets.txt', 'a') as file:
-                #     [file.write('%11.5g ' * 4 % tuple(x) + '\n') for x in torch.cat((txy[i], twh[i]), 1)]
-
             obji = self.BCEobj(pi[..., 4], tobj)
             lobj += obji  # obj loss
 
@@ -245,7 +223,6 @@ class ComputeLoss:
                 # Matches
                 r = t[:, :, 4:6] / anchors[:, None]  # wh ratio
                 j = torch.max(r, 1 / r).max(2)[0] < self.hyp['anchor_t']  # compare
-                # j = wh_iou(anchors, t[:, 4:6]) > model.hyp['iou_t']  # iou(3,n)=wh_iou(anchors(3,2), gwh(n,2))
                 t = t[j]  # filter
 
                 # Offsets
